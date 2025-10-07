@@ -329,8 +329,8 @@
                 <p style="color: #666;">次</p>
 
                 <div id="countdownBox" class="countdown-box" style="display: none;">
-                    <p style="color: #666; margin-bottom: 8px;">⏰ 下次拥抱倒计时</p>
-                    <div class="countdown-time" id="countdownTime">60:00</div>
+                    <p style="color: #666; margin-bottom: 8px;">⏰ 已经过时间</p>
+                    <div class="countdown-time" id="countdownTime">0:00</div>
                     <button class="stop-button" onclick="stopCountdown()">
                         ⏹ 停止计时
                     </button>
@@ -372,11 +372,12 @@
 
     <script>
         var hugs = [];
-        var timeRemaining = null;
+        var timeElapsed = 0;
         var isActive = true;
         var countdownInterval = null;
         var pauseStart = '22:00';
         var pauseEnd = '08:00';
+        var isCountingUp = false;
 
         function init() {
             loadData();
@@ -400,11 +401,9 @@
                 if (hugs.length > 0) {
                     var lastHug = hugs[hugs.length - 1];
                     var timeSinceLastHug = Date.now() - lastHug.timestamp;
-                    var remaining = 3600000 - timeSinceLastHug;
-                    if (remaining > 0) {
-                        timeRemaining = remaining;
-                        startCountdown();
-                    }
+                    timeElapsed = timeSinceLastHug;
+                    isCountingUp = true;
+                    startCountdown();
                 }
             }
         }
@@ -454,15 +453,27 @@
         }
 
         function recordHug() {
+            var heartColor = 'red';
+            var minutes = Math.floor(timeElapsed / 60000);
+            
+            if (minutes >= 60 && minutes <= 70) {
+                heartColor = 'pink';
+            } else if (minutes > 70) {
+                heartColor = 'yellow';
+            }
+            
             var newHug = {
                 id: Date.now(),
                 timestamp: Date.now(),
-                date: new Date().toISOString().split('T')[0]
+                date: new Date().toISOString().split('T')[0],
+                color: heartColor,
+                delayMinutes: minutes
             };
             hugs.push(newHug);
             saveData();
             
-            timeRemaining = 3600000;
+            timeElapsed = 0;
+            isCountingUp = true;
             startCountdown();
             updateDisplay();
             requestNotificationPermission();
@@ -474,15 +485,12 @@
             }
             
             countdownInterval = setInterval(function() {
-                if (isActive && timeRemaining > 0) {
-                    timeRemaining -= 1000;
+                if (isActive && isCountingUp) {
+                    timeElapsed += 1000;
                     updateDisplay();
                     
-                    if (timeRemaining <= 0) {
-                        timeRemaining = 0;
-                        clearInterval(countdownInterval);
+                    if (timeElapsed >= 3600000 && timeElapsed < 3601000) {
                         sendNotification();
-                        updateDisplay();
                     }
                 }
             }, 1000);
@@ -493,7 +501,8 @@
                 clearInterval(countdownInterval);
                 countdownInterval = null;
             }
-            timeRemaining = null;
+            timeElapsed = 0;
+            isCountingUp = false;
             updateDisplay();
         }
 
@@ -518,11 +527,13 @@
 
             if (!isActive) {
                 pauseBox.style.display = 'block';
-            } else if (timeRemaining !== null && timeRemaining > 0) {
+            } else if (isCountingUp) {
                 countdownBox.style.display = 'block';
-                document.getElementById('countdownTime').textContent = formatTime(timeRemaining);
-            } else if (timeRemaining === 0) {
-                alertBox.style.display = 'block';
+                document.getElementById('countdownTime').textContent = formatTime(timeElapsed);
+                
+                if (timeElapsed >= 3600000) {
+                    alertBox.style.display = 'block';
+                }
             }
 
             updateWeekStats();
@@ -549,12 +560,21 @@
             var html = '';
             for (var j = 0; j < days.length; j++) {
                 var date = days[j];
-                var count = hugs.filter(function(h) { return h.date === date; }).length;
+                var dayHugs = hugs.filter(function(h) { return h.date === date; });
+                var count = dayHugs.length;
                 var dateObj = new Date(date);
                 var dayName = dayNames[dateObj.getDay()];
                 var hearts = '';
+                
                 for (var k = 0; k < Math.min(count, 10); k++) {
-                    hearts += '❤️';
+                    var hug = dayHugs[k];
+                    var heartEmoji = '❤️';
+                    if (hug.color === 'pink') {
+                        heartEmoji = '💗';
+                    } else if (hug.color === 'yellow') {
+                        heartEmoji = '💛';
+                    }
+                    hearts += heartEmoji;
                 }
                 
                 html += '<div class="day-row">' +
